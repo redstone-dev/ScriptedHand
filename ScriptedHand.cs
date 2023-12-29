@@ -1,28 +1,17 @@
 using System;
 using System.IO;
-using System.Collections.Generic;
-using Microsoft.Xna.Framework;
-using StardewModdingAPI;
-using StardewModdingAPI.Events;
-using StardewModdingAPI.Utilities;
-using StardewValley;
-using System.Linq;
 using MoonSharp.Interpreter;
-using System.Runtime.CompilerServices;
+using StardewModdingAPI;
+using System.Linq;
 
 namespace ScriptedHand
 {
-    /*
-     * TODO:
-     * - let Lua use the SMAPIPrint() function
-     */
     /// <summary>The mod entry point.</summary>
     internal sealed class ModEntry : Mod
     {
-        private IModHelper modHelper;
 
-        string scriptName = "";
-        string scriptPath = "";
+        Script library = new();
+
         /*********
         ** Public methods
         *********/
@@ -30,7 +19,6 @@ namespace ScriptedHand
         /// <param name="helper">Provides simplified APIs for writing mods.</param>
         public override void Entry(IModHelper helper)
         {
-            this.modHelper = helper;
             this.LoadConsoleCommands(helper);
         }
 
@@ -39,62 +27,57 @@ namespace ScriptedHand
         ** Private methods
         *********/
 
-        /// <summary>Reloads the current Lua script.</summary>
-        private void ReloadCurrentScript(string command, string[] args)
+        private void RunScript(string command, string[] args)
         {
-            string[] _args = { scriptPath };
-            this.LoadLuaScript(command, _args);
-            this.Monitor.Log($"Reloaded script {scriptName}", LogLevel.Info);
-        }
-
-        /// <summary>SMAPI console command to load the specified Lua script.</summary>
-        private void LoadLuaScript(string command, string[] args)
-        {
-            scriptName = args[0];
-            scriptPath = Path.Combine(modHelper.DirectoryPath, "Scripts", args[0]);
-
-            this.Monitor.Log($"Loaded script {args[0]}", LogLevel.Info);
-        }
-
-        /// <summary>SMAPI console command to run the currently loaded Lua script.</summary>
-        private void RunCurrentScript(string command, string[] args)
-        {
-            this.Monitor.Log($"Running script '{scriptName}'...", LogLevel.Info);
-            Script.RunFile(scriptPath);
-        }
-
-        /// <summary>SMAPI console command to unload the currently loaded Lua script.</summary>
-        private void UnloadCurrentScript(string command, string[] args)
-        {
-            try
+            string s = File.ReadAllText(Path.Combine(this.Helper.DirectoryPath, "Lua", args[0]));
+            if (s.Split("\n")[0] != "function main()")
             {
-                this.Monitor.Log($"Unloading script {args[0]}!", LogLevel.Info);
+                // requires main function so the script can't do anything funky
+                Monitor.Log($"Lua Error: Script \"{args[0]}\" does not contain a main function!", LogLevel.Error);
+                return;
+            }
+            Script script = new();
+            this.InjectAPI(script);
 
-                this.scriptName = "";
-                this.scriptPath = "";
-                Script.RunString("");
-            } catch
+            script.DoString(s);
+
+            script.Call(script.Globals["main"]); // call main function
+        }
+
+        private void RunScripts(string command, string[] args)
+        {
+            foreach (string scriptName in args)
             {
-                this.Monitor.Log($"Could not unload script {args[0]}!", LogLevel.Error);
+                Script.RunString(File.ReadAllText(Path.Combine(this.Helper.DirectoryPath, "Lua", scriptName)));
             }
         }
 
-        /// <summary>Method to load all the SMAPI console commands. For organizaiton purposes.</summary>
+        /// <summary>Method to load all the SMAPI console commands. For organization purposes.</summary>
         private void LoadConsoleCommands(IModHelper helper)
         {
             helper.ConsoleCommands.Add(
-                "reload_script", 
-                "Updates the currently loaded Lua script. Run this after every change you make.", 
-                ReloadCurrentScript);
+                "run_script",
+                "Run the specified Lua script.\nExample: run_script helloworld.lua",
+                RunScript
+                );
             helper.ConsoleCommands.Add(
-                "load_script",
-                "Loads the specified script.\nTakes the script's filename as an argument.\nNOTE: Scripts MUST be placed in a subdirectory of the mod's directory called Lua.",
-                LoadLuaScript);
-            helper.ConsoleCommands.Add(
-                "unload_script",
-                "Unloads the currently loaded Lua script.",
-                UnloadCurrentScript);
+                "run_scripts",
+                "Run a bunch of scripts in order from left to right.\nExample: run_scripts script1.lua script2.lua script3.lua",
+                RunScripts
+                );
 
+        }
+
+        /// <summary>
+        /// Called to let Lua use C# methods.
+        /// </summary>
+        /// <param name="script">The Script object to allow access to.</param>
+
+        internal void InjectAPI(Script script)
+        {
+            //script.Globals["movePlayer"] = (Func<int, int, int>)MovePlayer;
+            //script.Globals["interact"] = (Func<int>)Interact;
+            script.Globals["smapiPrint"] = (Func<string, string, int>)SMAPIPrint;
         }
 
         /*****************
@@ -104,7 +87,7 @@ namespace ScriptedHand
         /// <summary>
         /// A type representing either the Left or Right mouse button.
         /// </summary>
-        public enum MouseButton { Left, Right }
+        private enum MouseButton { Left, Right };
 
         /// <summary>
         /// Moves the player by (x, y) tiles horizontally 
@@ -114,18 +97,18 @@ namespace ScriptedHand
         /// horizontally.</param>
         /// <param name="y">Amount of tiles to move 
         /// vertically.</param>
-        public void MovePlayerBy(int x, int y)
+        private int MovePlayer(int x, int y)
         {
-
+            return 0;
         }
 
         /// <summary>
         /// Emulates interacting with a tile in front 
         /// of the player.
         /// </summary>
-        public void Interact()
+        private int Interact()
         {
-
+            return 0;
         }
 
         /// <summary>
@@ -133,9 +116,9 @@ namespace ScriptedHand
         /// of the player. Depends on the hotbar slot 
         /// currently selected.
         /// </summary>
-        public void UseTool()
+        private int UseTool()
         {
-
+            return 0;
         }
 
         /// <summary>
@@ -144,9 +127,10 @@ namespace ScriptedHand
         /// </summary>
         /// <param name="slot">The hotbar slot to switch to, 
         /// from 0-9 as well as - and =.</param>
-        public void SwitchItemTo(int slot)
+        private int SwitchItemTo(int slot)
         {
             // TODO: figure out how to emulate keyboard input or switch hotbar slots from C#
+            return 0;
         }
 		
 		/// <summary>
@@ -154,7 +138,7 @@ namespace ScriptedHand
 		/// </summary>
 		///	<param name="text">String to print to the console.</param>
 		/// <param name="logLevel">Log level. Must be one of TRACE | DEBUG | INFO | ALERT | WARN | ERROR.</param>
-        public void SMAPIPrint(string text, string logLevel)
+        private int SMAPIPrint(string text, string logLevel)
         {
             LogLevel ll;
             switch(logLevel)
@@ -179,9 +163,10 @@ namespace ScriptedHand
                     break;
                 default:
                     this.Monitor.Log("[From Lua] Tried to log with invalid log level!", LogLevel.Error);
-                    return;
+                    return 0;
             }
             this.Monitor.Log(text, ll);
+            return 0;
         }
     }
 }
