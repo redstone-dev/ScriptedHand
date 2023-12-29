@@ -1,0 +1,24 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+    
+  <PropertyGroup>
+    <TargetFramework>net5.0</TargetFramework>
+  </PropertyGroup>
+    
+  <!-- <ItemGroup>
+    <None Remove="DynamicLua.dll" />
+  </ItemGroup> -->
+
+  <ItemGroup>
+    <PackageReference Include="Pathoschild.Stardew.ModBuildConfig" Version="4.1.1" />
+    <PackageReference Include="MoonSharp" Version="2.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+	  <Reference Include="NLua.dll" />
+    <Reference Include="KeraLua.dll" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Remove="MoonSharp" />
+  </ItemGroup>
+</Project>

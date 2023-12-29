@@ -1,0 +1,10 @@
+{
+    "Name": "ScriptedHand",
+    "Author": "RedstoneDev",
+    "Version": "1.0.0",
+    "Description": "Create Lua scripts to automate tasks",
+    "UniqueID": "RedstoneDev.ScriptedHand",
+    "EntryDll": "ScriptedHand.dll",
+    "MinimumApiVersion": "3.0.0",
+    "UpdateKeys": []
+}
