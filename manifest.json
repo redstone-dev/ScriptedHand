@@ -6,5 +6,5 @@
     "UniqueID": "RedstoneDev.ScriptedHand",
     "EntryDll": "ScriptedHand.dll",
     "MinimumApiVersion": "3.0.0",
-    "UpdateKeys": []
+    "UpdateKeys": ["GitHub:redstone-dev/ScriptedHand"]
 }

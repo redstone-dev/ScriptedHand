@@ -26,15 +26,13 @@ namespace ScriptedHand
         
         void OnButtonPressed(object sender, ButtonPressedEventArgs ev)
         {
-            // Don't process button presses if player hasn't loaded a save,
-            // is in another menu, or isn't free. I'd recommended you ignore these cases too.
-            if (!Context.IsWorldReady) return;
-            if (Game1.activeClickableMenu != null || (!Context.IsPlayerFree)) return;
-
-            // Display our UI if user presses F10
-            if (ev.Button == SButton.F10)
+            
+            //if (!Context.IsWorldReady) return;
+            if (Game1.activeClickableMenu != null || (!Context.IsPlayerFree))
+                return;
+            // Display UI if user presses F10
+            if (ev.Button == SButton.J)
                 Game1.activeClickableMenu = new ControlPanel();
-
         }
 
         /*********
@@ -43,15 +41,17 @@ namespace ScriptedHand
 
         private void RunScript(string command, string[] args)
         {
-            string s = File.ReadAllText(Path.Combine(this.Helper.DirectoryPath, "Lua", args[0]));
+            string s = File.ReadAllText(Path.Combine(Helper.DirectoryPath,
+                "Lua", args[0]));
             if (s.Split("\n")[0] != "function main()")
             {
                 // requires main function so the script can't do anything funky
-                Monitor.Log($"Lua Error: Script \"{args[0]}\" does not contain a main function!", LogLevel.Error);
+                Monitor.Log($"Lua Error: Script \"{args[0]}\" does not start " +
+                    $"with a main function!", LogLevel.Error);
                 return;
             }
             Script script = new();
-            this.InjectAPI(script);
+            InjectAPI(script);
 
             script.DoString(s);
 
@@ -62,11 +62,14 @@ namespace ScriptedHand
         {
             foreach (string scriptName in args)
             {
-                Script.RunString(File.ReadAllText(Path.Combine(this.Helper.DirectoryPath, "Lua", scriptName)));
+                Script.RunString(File.ReadAllText
+                    (Path.Combine(this.Helper.DirectoryPath,
+                    "Lua", scriptName)));
             }
         }
 
-        /// <summary>Method to load all the SMAPI console commands. For organization purposes.</summary>
+        /// <summary>Method to load all the SMAPI console commands.
+        /// For organization purposes.</summary>
         private void LoadConsoleCommands(IModHelper helper)
         {
             helper.ConsoleCommands.Add(
@@ -90,18 +93,26 @@ Example: run_scripts script1.lua script2.lua script3.lua",
                 string s = File.ReadAllText(p);
                 if (!s.Contains("function commands()"))
                 {
-                    Monitor.Log($"Lua Error: _onStart.lua does not contain a commands function, and was prevented from running.", LogLevel.Error);
+                    Monitor.Log($"Lua Error: _onStart.lua does not contain a " +
+                        $"commands function, and was prevented from running.",
+                        LogLevel.Error);
                     return;
                 }
                 Script script = new();
-                this.InjectAPI(script);
+                script.Options.DebugPrint = (str) =>
+                {
+                    Monitor.Log(str, LogLevel.Info);
+                };
+                InjectAPI(script);
                     
                 script.DoString(s);
 
                 DynValue commands = script.Call(script.Globals.Get("commands"));
                 if (commands.Type != DataType.Table)
                 {
-                    Monitor.Log($"Lua Error: Your commands() function needs to return a Table, not a {commands.Type}", LogLevel.Error);
+                    Monitor.Log($"Lua Error: Your commands() function needs to " +
+                        $"return a Table, not a {commands.Type}",
+                        LogLevel.Error);
                     return;
                 }
                 Table commandTable = commands.Table;
@@ -109,11 +120,18 @@ Example: run_scripts script1.lua script2.lua script3.lua",
                 {
                     Table table = pair.Value.Table;
                     //Monitor.Log($"{pair.Key} {pair.Value}", LogLevel.Info);
-                    helper.ConsoleCommands.Add(table.Get(1).String, table.Get(2).String, (command, args) =>
+                    helper.ConsoleCommands.Add(table.Get(1).String,
+                        table.Get(2).String, (command, args) =>
                     {
-                        script.Call(script.Globals[table.Get(3).String], command, args);
+
+                        script.Call(script.Globals[table.Get(3).String],
+                            command, args);
                     });
                 }
+
+                // Run the startup script's main() as well
+                //if ()
+                    //script.Call(script.Globals.Get("main"));
             }
         }
 
@@ -126,7 +144,23 @@ Example: run_scripts script1.lua script2.lua script3.lua",
         {
             //script.Globals["movePlayer"] = (Func<int, int, int>)MovePlayer;
             //script.Globals["interact"] = (Func<int>)Interact;
-            script.Globals["smapiPrint"] = (Action<string, string>)SMAPIPrint;
+            script.Globals["printl"] = (Action<string, string>)SMAPIPrint;
+
+            // controlPanel.* api
+            Table controlPanel = new Table(script);
+
+            // This was the only way I could think of to convert AddControl
+            // to a DynValue, and I'm sorry.
+            // (I could have made it a one-liner which makes this worse)
+            Action<string, string, ControlPanel.ControlType> acDelegate
+                = ControlPanel.AddControl;
+            DynValue acdelToDynValue = DynValue.FromObject(script, acDelegate);
+            //Monitor.Log($"{acdelToDynValue.Type}", LogLevel.Debug);
+            controlPanel["addControl"] = acdelToDynValue;
+
+            Action lcDelegate = ControlPanel.LoadControls;
+            DynValue lcdelToDynValue = DynValue.FromObject(script, lcDelegate);
+            controlPanel["loadControls"] = lcdelToDynValue;
         }
 
         /*****************
@@ -219,8 +253,5 @@ Example: run_scripts script1.lua script2.lua script3.lua",
             this.Monitor.Log(text, ll);
             
         }
-
-        // Control Panel API
-
     }
 }
