@@ -2,15 +2,16 @@ using System;
 using System.IO;
 using MoonSharp.Interpreter;
 using StardewModdingAPI;
-using System.Linq;
+using StardewValley;
+using StardewModdingAPI.Events;
+using Microsoft.Xna.Framework;
+using System.Collections.Generic;
 
 namespace ScriptedHand
 {
     /// <summary>The mod entry point.</summary>
     internal sealed class ModEntry : Mod
     {
-
-        Script library = new();
 
         /*********
         ** Public methods
@@ -20,8 +21,21 @@ namespace ScriptedHand
         public override void Entry(IModHelper helper)
         {
             this.LoadConsoleCommands(helper);
+            helper.Events.Input.ButtonPressed += OnButtonPressed;
         }
+        
+        void OnButtonPressed(object sender, ButtonPressedEventArgs ev)
+        {
+            // Don't process button presses if player hasn't loaded a save,
+            // is in another menu, or isn't free. I'd recommended you ignore these cases too.
+            if (!Context.IsWorldReady) return;
+            if (Game1.activeClickableMenu != null || (!Context.IsPlayerFree)) return;
 
+            // Display our UI if user presses F10
+            if (ev.Button == SButton.F10)
+                Game1.activeClickableMenu = new ControlPanel();
+
+        }
 
         /*********
         ** Private methods
@@ -57,15 +71,50 @@ namespace ScriptedHand
         {
             helper.ConsoleCommands.Add(
                 "run_script",
-                "Run the specified Lua script.\nExample: run_script helloworld.lua",
+                @"Run the specified Lua script.
+Example: run_script helloworld.lua",
                 RunScript
                 );
             helper.ConsoleCommands.Add(
                 "run_scripts",
-                "Run a bunch of scripts in order from left to right.\nExample: run_scripts script1.lua script2.lua script3.lua",
+                @"Run a bunch of scripts in order from left to right.
+Example: run_scripts script1.lua script2.lua script3.lua",
                 RunScripts
                 );
 
+            // Load console commands from Lua files
+            string p = Path.Combine(Helper.DirectoryPath, "Lua", "_onStart.lua");
+            if (File.Exists(p))
+            {
+                Monitor.LogOnce("Detected _onStart.lua, running script...");
+                string s = File.ReadAllText(p);
+                if (!s.Contains("function commands()"))
+                {
+                    Monitor.Log($"Lua Error: _onStart.lua does not contain a commands function, and was prevented from running.", LogLevel.Error);
+                    return;
+                }
+                Script script = new();
+                this.InjectAPI(script);
+                    
+                script.DoString(s);
+
+                DynValue commands = script.Call(script.Globals.Get("commands"));
+                if (commands.Type != DataType.Table)
+                {
+                    Monitor.Log($"Lua Error: Your commands() function needs to return a Table, not a {commands.Type}", LogLevel.Error);
+                    return;
+                }
+                Table commandTable = commands.Table;
+                foreach (TablePair pair in commandTable.Pairs)
+                {
+                    Table table = pair.Value.Table;
+                    //Monitor.Log($"{pair.Key} {pair.Value}", LogLevel.Info);
+                    helper.ConsoleCommands.Add(table.Get(1).String, table.Get(2).String, (command, args) =>
+                    {
+                        script.Call(script.Globals[table.Get(3).String], command, args);
+                    });
+                }
+            }
         }
 
         /// <summary>
@@ -77,13 +126,13 @@ namespace ScriptedHand
         {
             //script.Globals["movePlayer"] = (Func<int, int, int>)MovePlayer;
             //script.Globals["interact"] = (Func<int>)Interact;
-            script.Globals["smapiPrint"] = (Func<string, string, int>)SMAPIPrint;
+            script.Globals["smapiPrint"] = (Action<string, string>)SMAPIPrint;
         }
 
         /*****************
          * Scripting API *
          *****************/
-
+        // TODO: harmony hijacking the InputState.GetGamePadState and pretending to be a game controller
         /// <summary>
         /// A type representing either the Left or Right mouse button.
         /// </summary>
@@ -97,18 +146,20 @@ namespace ScriptedHand
         /// horizontally.</param>
         /// <param name="y">Amount of tiles to move 
         /// vertically.</param>
-        private int MovePlayer(int x, int y)
+        private void MovePlayer(int x, int y)
         {
-            return 0;
+            //PathFindController pfc = new(Game1.player, );
+            //pfc.;
+            // TODO: figure out how to move player x & y
         }
 
         /// <summary>
         /// Emulates interacting with a tile in front 
         /// of the player.
         /// </summary>
-        private int Interact()
+        private void Interact()
         {
-            return 0;
+            // TODO: force player to interact
         }
 
         /// <summary>
@@ -116,9 +167,9 @@ namespace ScriptedHand
         /// of the player. Depends on the hotbar slot 
         /// currently selected.
         /// </summary>
-        private int UseTool()
+        private void UseTool()
         {
-            return 0;
+            // TODO: force player to use tool
         }
 
         /// <summary>
@@ -127,10 +178,10 @@ namespace ScriptedHand
         /// </summary>
         /// <param name="slot">The hotbar slot to switch to, 
         /// from 0-9 as well as - and =.</param>
-        private int SwitchItemTo(int slot)
+        private void SwitchItemTo(int slot)
         {
             // TODO: figure out how to emulate keyboard input or switch hotbar slots from C#
-            return 0;
+            
         }
 		
 		/// <summary>
@@ -138,7 +189,7 @@ namespace ScriptedHand
 		/// </summary>
 		///	<param name="text">String to print to the console.</param>
 		/// <param name="logLevel">Log level. Must be one of TRACE | DEBUG | INFO | ALERT | WARN | ERROR.</param>
-        private int SMAPIPrint(string text, string logLevel)
+        private void SMAPIPrint(string text, string logLevel)
         {
             LogLevel ll;
             switch(logLevel)
@@ -162,11 +213,14 @@ namespace ScriptedHand
                     ll = LogLevel.Error;
                     break;
                 default:
-                    this.Monitor.Log("[From Lua] Tried to log with invalid log level!", LogLevel.Error);
-                    return 0;
+                    this.Monitor.Log("Lua Error: Tried to log with invalid log level!", LogLevel.Error);
+                    return;
             }
             this.Monitor.Log(text, ll);
-            return 0;
+            
         }
+
+        // Control Panel API
+
     }
 }
