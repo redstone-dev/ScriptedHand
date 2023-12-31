@@ -4,8 +4,7 @@ using MoonSharp.Interpreter;
 using StardewModdingAPI;
 using StardewValley;
 using StardewModdingAPI.Events;
-using Microsoft.Xna.Framework;
-using System.Collections.Generic;
+using System.Linq;
 
 namespace ScriptedHand
 {
@@ -22,6 +21,11 @@ namespace ScriptedHand
         {
             this.LoadConsoleCommands(helper);
             helper.Events.Input.ButtonPressed += OnButtonPressed;
+
+            Script.DefaultOptions.DebugPrint = (str) =>
+            {
+                Monitor.Log(str, LogLevel.Info);
+            };
         }
         
         void OnButtonPressed(object sender, ButtonPressedEventArgs ev)
@@ -30,7 +34,7 @@ namespace ScriptedHand
             //if (!Context.IsWorldReady) return;
             if (Game1.activeClickableMenu != null || (!Context.IsPlayerFree))
                 return;
-            // Display UI if user presses F10
+            // Display UI if user presses J
             if (ev.Button == SButton.J)
                 Game1.activeClickableMenu = new ControlPanel();
         }
@@ -43,13 +47,14 @@ namespace ScriptedHand
         {
             string s = File.ReadAllText(Path.Combine(Helper.DirectoryPath,
                 "Lua", args[0]));
-            if (s.Split("\n")[0] != "function main()")
+            if (s.Split(Environment.NewLine)[0] != "function main()")
             {
                 // requires main function so the script can't do anything funky
                 Monitor.Log($"Lua Error: Script \"{args[0]}\" does not start " +
                     $"with a main function!", LogLevel.Error);
                 return;
             }
+
             Script script = new();
             InjectAPI(script);
 
@@ -86,23 +91,20 @@ Example: run_scripts script1.lua script2.lua script3.lua",
                 );
 
             // Load console commands from Lua files
-            string p = Path.Combine(Helper.DirectoryPath, "Lua", "_onStart.lua");
+            string p = Path.Combine(Helper.DirectoryPath, "Lua", "_entry.lua");
             if (File.Exists(p))
             {
-                Monitor.LogOnce("Detected _onStart.lua, running script...");
+                Monitor.LogOnce("Detected _entry.lua, running script...");
                 string s = File.ReadAllText(p);
                 if (!s.Contains("function commands()"))
                 {
-                    Monitor.Log($"Lua Error: _onStart.lua does not contain a " +
+                    Monitor.Log($"Lua Error: _entry.lua does not contain a " +
                         $"commands function, and was prevented from running.",
                         LogLevel.Error);
                     return;
                 }
                 Script script = new();
-                script.Options.DebugPrint = (str) =>
-                {
-                    Monitor.Log(str, LogLevel.Info);
-                };
+                
                 InjectAPI(script);
                     
                 script.DoString(s);
@@ -130,9 +132,32 @@ Example: run_scripts script1.lua script2.lua script3.lua",
                 }
 
                 // Run the startup script's main() as well
-                //if ()
-                    //script.Call(script.Globals.Get("main"));
+                if (TableContains(script.Globals, "main"))
+                    script.Call(script.Globals.Get("main"));
             }
+        }
+
+        /// <summary>
+        /// Checks if a Table contains a certain key.
+        /// </summary>
+        /// <param name="table">The Table to check.</param>
+        /// <param name="key">The key to look for.</param>
+        /// <returns>true if the key was found.</returns>
+        internal bool TableContains(Table table, string key)
+        {
+
+            return !(table.Keys.All((DynValue d) => d.String != key));
+        }
+
+        /// <summary>
+        /// Checks a script for malicious code.
+        /// </summary>
+        /// <param name="script">The script, as a string, to check.</param>
+        /// <returns>true if malicious code was found.</returns>
+        internal bool CheckScript(string script)
+        {
+            
+            return script.Contains("while true do");
         }
 
         /// <summary>
@@ -151,12 +176,16 @@ Example: run_scripts script1.lua script2.lua script3.lua",
 
             // This was the only way I could think of to convert AddControl
             // to a DynValue, and I'm sorry.
-            // (I could have made it a one-liner which makes this worse)
-            Action<string, string, ControlPanel.ControlType> acDelegate
-                = ControlPanel.AddControl;
-            DynValue acdelToDynValue = DynValue.FromObject(script, acDelegate);
+            // (I could have made it a one-liner which would have been worse)
+            //Action<string, string, ControlPanel.ControlType> acDelegate
+            //  = ControlPanel.AddControl;
+            //DynValue acdelToDynValue = DynValue.FromObject(script, acDelegate);
             //Monitor.Log($"{acdelToDynValue.Type}", LogLevel.Debug);
-            controlPanel["addControl"] = acdelToDynValue;
+            //controlPanel["addControl"] = acdelToDynValue;
+
+            Action<ControlData[]> llDelegate = ControlPanel.ListLayout;
+            DynValue llDelToDynValue = DynValue.FromObject(script, llDelegate);
+            controlPanel["listLayout"] = llDelToDynValue;
 
             Action lcDelegate = ControlPanel.LoadControls;
             DynValue lcdelToDynValue = DynValue.FromObject(script, lcDelegate);
