@@ -5,6 +5,10 @@ using StardewModdingAPI;
 using StardewValley;
 using StardewModdingAPI.Events;
 using System.Linq;
+using System.Collections;
+using System.Collections.Generic;
+using System.Security.Cryptography;
+using System.ComponentModel;
 
 namespace ScriptedHand
 {
@@ -89,7 +93,10 @@ Example: run_script helloworld.lua",
 Example: run_scripts script1.lua script2.lua script3.lua",
                 RunScripts
                 );
+            LoadEntryScript(helper);
+        }
 
+        private void LoadEntryScript(IModHelper helper) {
             // Load console commands from Lua files
             string p = Path.Combine(Helper.DirectoryPath, "Lua", "_entry.lua");
             if (File.Exists(p))
@@ -109,31 +116,76 @@ Example: run_scripts script1.lua script2.lua script3.lua",
                     
                 script.DoString(s);
 
-                DynValue commands = script.Call(script.Globals.Get("commands"));
-                if (commands.Type != DataType.Table)
-                {
-                    Monitor.Log($"Lua Error: Your commands() function needs to " +
-                        $"return a Table, not a {commands.Type}",
-                        LogLevel.Error);
-                    return;
-                }
+                DynValue commands = script.Globals.Get("commands");
+
                 Table commandTable = commands.Table;
+
+                // Add console commands from script
                 foreach (TablePair pair in commandTable.Pairs)
                 {
                     Table table = pair.Value.Table;
-                    //Monitor.Log($"{pair.Key} {pair.Value}", LogLevel.Info);
-                    helper.ConsoleCommands.Add(table.Get(1).String,
-                        table.Get(2).String, (command, args) =>
-                    {
-
-                        script.Call(script.Globals[table.Get(3).String],
-                            command, args);
-                    });
+                    
+                    helper.ConsoleCommands.Add(
+                        table.Get(1).String,
+                        table.Get(2).String, 
+                        (command, args) =>
+                        {
+                            script.Call(script.Globals[table.Get(3).String],
+                                command, args);
+                        }
+                    );
                 }
+
+                // check for code that could crash SDV
+                if (CheckScript(s))
+                    throw new Exception("WARNING: Your script could cause the game to hang and/or crash, so it was prevented from running. You can try removing any \"while true\" loops to let it run.");
 
                 // Run the startup script's main() as well
                 if (TableContains(script.Globals, "main"))
                     script.Call(script.Globals.Get("main"));
+
+                // and finally, load the controls
+                // (the most complicated part)
+                Table controlsTable = script.Globals.Get("controls").Table;
+                string layoutType = controlsTable.Get("layout").String;
+                Table controls = controlsTable.Get("controls").Table;
+
+                List<ControlData> controlsData = new List<ControlData>();
+
+                foreach(TablePair pair in controls.Pairs)
+                {
+                    Table control = pair.Value.Table;
+                    string controlName = control.Get(1).String;
+                    string controlType = control.Get(2).String;
+                    ControlPanel.ControlType eControlType;
+
+                    Table controlProperties = control.Get(3).Table;
+                    string controlValue = controlType != "BUTTON" ? control.Get(4).String : "";
+
+                    switch (controlType)
+                    {
+                        case "BUTTON":
+                            eControlType = ControlPanel.ControlType.Button; break;
+                        case "CHECKBOX":
+                            eControlType = ControlPanel.ControlType.Checkbox; break;
+                        case "NUMBERINPUT":
+                            eControlType = ControlPanel.ControlType.NumberInput; break;
+                        case "TEXTINPUT":
+                            eControlType = ControlPanel.ControlType.TextInput; break;
+                        case "SLIDER":
+                            eControlType = ControlPanel.ControlType.Slider; break;
+                        default:
+                            throw new Exception($"Lua Error: {controlType} is not a valid control type!");
+                    }
+
+                    if (controlType == "BUTTON")
+                    {
+                        controlsData.Add(new ControlData(controlName, controlProperties.Get("text").String, eControlType));
+                        continue;
+                    }
+
+
+                }
             }
         }
 
@@ -156,7 +208,6 @@ Example: run_scripts script1.lua script2.lua script3.lua",
         /// <returns>true if malicious code was found.</returns>
         internal bool CheckScript(string script)
         {
-            
             return script.Contains("while true do");
         }
 
@@ -183,13 +234,8 @@ Example: run_scripts script1.lua script2.lua script3.lua",
             //Monitor.Log($"{acdelToDynValue.Type}", LogLevel.Debug);
             //controlPanel["addControl"] = acdelToDynValue;
 
-            Action<ControlData[]> llDelegate = ControlPanel.ListLayout;
-            DynValue llDelToDynValue = DynValue.FromObject(script, llDelegate);
-            controlPanel["listLayout"] = llDelToDynValue;
 
-            Action lcDelegate = ControlPanel.LoadControls;
-            DynValue lcdelToDynValue = DynValue.FromObject(script, lcDelegate);
-            controlPanel["loadControls"] = lcdelToDynValue;
+
         }
 
         /*****************

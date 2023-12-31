@@ -1,6 +1,7 @@
 ﻿using System;
 namespace ScriptedHand
 {
+    // TODO: bring in line with _entry.lua
     public class ControlData
     {
         public string name;

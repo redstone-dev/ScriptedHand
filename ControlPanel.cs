@@ -76,18 +76,18 @@ namespace ScriptedHand
                 {
                     // Draw label
                     Utility.drawTextWithShadow(b, control.data.label, Game1.dialogueFont, new Vector2(control.x, control.y), Color.Black);
-                    
-                    // Draw control
-                    switch (control.data.controlType)
-                    {
-                        case ControlType.Button:
-                            
-                            break;
-                        default:
-                            throw new Exception($"Lua Error: Invalid control type " +
-                                $"{control.data.controlType}. Must be one of Button," +
-                                $"Checkbox, NumberInput, TextInput, or Slider");
-                    }
+
+                    //TODO: Draw control
+                    //switch (control.data.controltype)
+                    //{
+                    //    case controltype.button:
+
+                    //        break;
+                    //    default:
+                    //        throw new exception($"lua error: invalid control type " +
+                    //            $"{control.data.controltype}. must be one of button," +
+                    //            $"checkbox, numberinput, textinput, or slider");
+                    //}
                 }
 
             // draw cursor at last
@@ -98,13 +98,6 @@ namespace ScriptedHand
         public enum ControlType
         {
             Button, Checkbox, NumberInput, TextInput, Slider
-        }
-
-
-        static public void LoadControls()
-        {
-            throw new NotImplementedException("Lua Error: loadControls() is not " +
-                "implemented yet");
         }
 
         static public void ListLayout(params ControlData[] controls)
